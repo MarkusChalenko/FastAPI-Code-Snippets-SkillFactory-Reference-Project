@@ -1,15 +1,10 @@
-import enum
+from typing import Dict
 
 from sqlalchemy import Column, Integer, Enum
 from sqlalchemy.orm import relationship
 
+from core.types import RoleEnum
 from .base import Base
-
-
-class RoleEnum(enum.Enum):
-    GUEST = "guest"
-    ADMIN = "admin"
-    USER = "user"
 
 
 class Role(Base):
@@ -18,3 +13,8 @@ class Role(Base):
     name = Column(Enum(RoleEnum), unique=True, nullable=False)
 
     users = relationship("User", back_populates="role")
+
+    def to_dict(self) -> Dict:
+        return {
+            "name": self.name.name
+        }

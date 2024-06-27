@@ -1,50 +1,51 @@
-from datetime import timedelta, datetime
-from typing import Annotated, Dict
-from calendar import timegm
+from typing import Optional
 
-from fastapi import HTTPException, Depends
+from asyncpg import UniqueViolationError
+from fastapi import HTTPException
 from sqlalchemy import select
 
-from jose import jwt, JWTError
+from sqlalchemy.orm import joinedload
 from starlette import status
 
-from auth.auth import bcrypt_context, oauth2_bearer
-from core.config import app_settings
+from auth.auth import bcrypt_context, hash_password, generate_salt
 from db.db import db_dependency
 from models import User
+from schemas.user import UserLoginSchema, UserRegisterSchema
 
 
-async def authenticate_user(login: str, password: str, db: db_dependency) -> User | bool:
-    statement = select(User).where(User.login == login)
-    result = await db.execute(statement)
-    user = result.scalars().first()
+# Регистрация пользователя
+async def reg_user(user_data: UserRegisterSchema, db: db_dependency):
+    user_salt: str = generate_salt()
+    try:
+        create_user_statement: User = User(
+            **user_data.model_dump(exclude={'password'}),  # распаковываем объект пользователя, исключая пароль
+            salt=user_salt,
+            hashed_password=hash_password(user_data.password, user_salt)
+        )
+        # создаем пользователя в базе данных
+        db.add(create_user_statement)
+        await db.commit()
+
+        return {"response": "User created successfully"}
+    except UniqueViolationError:
+        # если возникает ошибка UniqueViolationError - считаем, что пользователь с такими данными уже есть
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail='User with such credentials already exist')
+    except Exception as ex:
+        raise ex
+
+
+# Аутентификация пользователя
+async def authenticate_user(login_data: UserLoginSchema, db: db_dependency):
+    # делаем SELECT запрос в базу данных, для нахождения пользователя по email
+    result = await db.execute(select(User)
+                              .options(joinedload(User.role))
+                              .where(User.email == login_data.email))
+    user: Optional[User] = result.scalars().first()
+
+    # пользователь будет авторизован, если он зарегистрирован и ввел корректный пароль
     if not user:
         return False
-    if not bcrypt_context.verify(password, user.hashed_password):
+    if not bcrypt_context.verify(login_data.password + user.salt, user.hashed_password):
         return False
     return user
-
-
-def create_access_token(login: str, user_id: int, expires_delta: timedelta) -> str:
-    encode = {'sub': login, 'id': user_id}
-    expires = timegm((datetime.utcnow() + expires_delta).utctimetuple())
-    encode.update({'exp': expires})
-    return jwt.encode(encode, app_settings.jwt_secret, algorithm=app_settings.algorithm)
-
-
-async def get_current_user(token: Annotated[str, Depends(oauth2_bearer)]):
-    try:
-        payload: dict = jwt.decode(token, app_settings.jwt_secret,
-                                   algorithms=app_settings.algorithm)
-        user_name: str = payload.get('sub')
-        user_id: int = payload.get('id')
-        if user_name is None or user_id is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                detail="Could not validate user.")
-        return {'username': user_name, 'id': user_id}
-    except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail="Could not validate user.")
-
-
-user_dependency = Annotated[dict, Depends(get_current_user)]

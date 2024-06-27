@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import (async_sessionmaker,
 
 from core.config import app_settings
 
+
 # Функция get_async_session используется для получения асинхронной сессии SQLAlchemy
 async def get_async_session() -> AsyncSession:
     async with async_session() as session:
@@ -15,6 +16,7 @@ async def get_async_session() -> AsyncSession:
         except Exception:
             # в случае ошибки будет произведен откат транзакции
             await session.rollback()
+
 
 # Функция create_sessionmaker создает фабрику сессий для асинхронной работы с базой данных
 def create_sessionmaker(
@@ -26,6 +28,7 @@ def create_sessionmaker(
         expire_on_commit=False,
         class_=AsyncSession,
     )
+
 
 # Создание асинхронного движка SQLAlchemy для работы с PostgreSQL
 engine = create_async_engine(app_settings.postgres_dsn.unicode_string())

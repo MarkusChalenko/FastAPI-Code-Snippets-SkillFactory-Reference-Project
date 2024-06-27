@@ -22,7 +22,7 @@ LOGGING_CONFIG = {
       "class": "logging.handlers.RotatingFileHandler",
       "level": "DEBUG",
       "formatter": "detailed",
-      "filename": "logs/my_app.log",
+      "filename": "../logs/my_app.log",
       "maxBytes": 10000,
       "backupCount": 3
     },

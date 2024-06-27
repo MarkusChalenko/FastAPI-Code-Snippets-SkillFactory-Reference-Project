@@ -1,13 +1,15 @@
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from starlette import status
 from starlette.exceptions import HTTPException
 
-from auth.auth import authenticate_user, create_access_token, reg_user, get_current_user, user_dependency
+from auth.auth import create_access_token
 from db.db import db_dependency
+from models import User
 from schemas.user import UserRegisterSchema, UserLoginSchema
+from services.auth import reg_user, authenticate_user
 
 auth_router = APIRouter(prefix="/auth", tags=['auth'])
 
@@ -24,7 +26,7 @@ async def register_user(user_data: UserRegisterSchema, db: db_dependency):
 @auth_router.post("/login")
 async def login_for_access_token(db: db_dependency,
                                  login_data: UserLoginSchema):
-    user = await authenticate_user(login_data, db)
+    user: Optional[User] = await authenticate_user(login_data, db)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -32,9 +34,10 @@ async def login_for_access_token(db: db_dependency,
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = create_access_token(
-        data={"sub": user.email, "role": user.role.name.value}
+        data={**user.to_dict()}
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
 
 
 @auth_router.post("/token")
@@ -48,11 +51,7 @@ async def token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Could not validate user.")
     access_token = create_access_token(
-        data={"sub": user.email, "role": user.role.name.value}
+        data={**user.to_dict()}
     )
     return {'access_token': access_token, 'token_type': 'bearer'}
 
-
-@auth_router.get("/current_user")
-async def get_current_user(user: user_dependency):
-    return {"user": user}
