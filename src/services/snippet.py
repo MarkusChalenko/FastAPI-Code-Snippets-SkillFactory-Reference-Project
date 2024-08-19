@@ -27,7 +27,7 @@ async def create_code_snippet(db: db_dependency, code_snippet: CodeSnippetCreate
     return CodeSnippetSchema.from_orm(statement)
 
 
-async def update_code_snippet(db: db_dependency, uuid: str, code_snippet: CodeSnippetUpdate) -> CodeSnippetSchema | None:
+async def update_code_snippet(db: db_dependency, uuid: str, code_snippet: CodeSnippetUpdate) -> CodeSnippet | None:
     db_code_snippet: Optional[CodeSnippet] = await get_code_snippet_by_uuid(db, uuid)
     if db_code_snippet:
         db_code_snippet.programming_language = code_snippet.programming_language
